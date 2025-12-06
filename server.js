@@ -1,4 +1,6 @@
 const express = require('express');
+var filesystem = require('fs');
+var path = require('path');
 const app = express();
 
 app.use(express.json());
@@ -21,4 +23,19 @@ app.get('/', (req, res)=>{
 
 
 
+});
+
+app.use(function(req, res, next){
+    var filepath = path.join(__dirname, 'static', req.url);
+    filesystem.stat(filepath, function(err, fileinfo){
+        if(err){
+            next();
+            return;
+        }
+        if(fileinfo.isFile()){
+            res.sendFile(filepath);
+        } else {
+            next();
+        }
+    });
 });
