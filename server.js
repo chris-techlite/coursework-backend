@@ -1,25 +1,12 @@
 const express = require('express');
 const app = express();
-const path = require('path');
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb');
+const cors = require('cors');
 
 app.use(express.json());
+app.use(cors());
 
-
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
-
-app.use((req, res, next) => {
-  console.log(`[${new Date().toLocaleString()}] ${req.method} ${req.url}`);
-  next();
-});
-
-app.use(express.static(path.join(__dirname, 'static')));
-
+// Connect to MongoDB
 let db;
 MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', { useUnifiedTopology: true })
   .then(client => {
@@ -28,6 +15,7 @@ MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.
   })
   .catch(err => console.error("MongoDB connection error:", err));
 
+// GET all lessons
 app.get('/lessons', async (req, res) => {
   try {
     const lessons = await db.collection('lessons').find({}).toArray();
@@ -37,26 +25,25 @@ app.get('/lessons', async (req, res) => {
   }
 });
 
+// SEARCH lessons
 app.get('/search', async (req, res) => {
   const keyword = req.query.keyword || '';
   try {
-    const results = await db.collection('lessons').find({
+    const lessons = await db.collection('lessons').find({
       $or: [
         { title: { $regex: keyword, $options: 'i' } },
-        { subject: { $regex: keyword, $options: 'i' } },
         { description: { $regex: keyword, $options: 'i' } },
         { location: { $regex: keyword, $options: 'i' } },
         { price: { $regex: keyword, $options: 'i' } },
-        { space: { $regex: keyword, $options: 'i' } },
-        { availableInventory: { $regex: keyword, $options: 'i' } }
       ]
     }).toArray();
-    res.json(results);
+    res.json(lessons);
   } catch (err) {
     res.status(500).send(err);
   }
 });
 
+// POST orders
 app.post('/orders', async (req, res) => {
   const order = req.body;
   if (!order.customer || !order.items || !order.total) {
@@ -66,25 +53,15 @@ app.post('/orders', async (req, res) => {
   try {
     const result = await db.collection('orders').insertOne(order);
 
+    // Update inventory for each ordered item
     for (const item of order.items) {
       await db.collection('lessons').updateOne(
-        { id: item.id },
-        { $inc: { space: -item.quantity } }
+        { _id: new ObjectId(item._id) },
+        { $inc: { availableInventory: -1 } }
       );
     }
 
     res.json({ message: "Order saved and inventory updated", orderId: result.insertedId });
-  } catch (err) {
-    res.status(500).send(err);
-  }
-});
-
-app.put('/lessons/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
-  const update = req.body;
-  try {
-    await db.collection('lessons').updateOne({ id }, { $set: update });
-    res.json({ message: "Lesson updated" });
   } catch (err) {
     res.status(500).send(err);
   }
