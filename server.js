@@ -1,12 +1,11 @@
 const express = require('express');
 const app = express();
-const fs = require('fs');
 const path = require('path');
 const { MongoClient } = require('mongodb');
 
 app.use(express.json());
 
-// CORS
+
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -14,16 +13,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toLocaleString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'static')));
 
-// MongoDB connection
 let db;
 MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', { useUnifiedTopology: true })
   .then(client => {
@@ -32,26 +28,26 @@ MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.
   })
   .catch(err => console.error("MongoDB connection error:", err));
 
-// GET all lessons
 app.get('/lessons', async (req, res) => {
   try {
-    const results = await db.collection('lessons').find({}).toArray();
-    res.json(results);
+    const lessons = await db.collection('lessons').find({}).toArray();
+    res.json(lessons);
   } catch (err) {
     res.status(500).send(err);
   }
 });
 
-// SEARCH lessons
 app.get('/search', async (req, res) => {
   const keyword = req.query.keyword || '';
   try {
     const results = await db.collection('lessons').find({
       $or: [
         { title: { $regex: keyword, $options: 'i' } },
+        { subject: { $regex: keyword, $options: 'i' } },
         { description: { $regex: keyword, $options: 'i' } },
         { location: { $regex: keyword, $options: 'i' } },
         { price: { $regex: keyword, $options: 'i' } },
+        { space: { $regex: keyword, $options: 'i' } },
         { availableInventory: { $regex: keyword, $options: 'i' } }
       ]
     }).toArray();
@@ -61,7 +57,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// POST order and update inventory
 app.post('/orders', async (req, res) => {
   const order = req.body;
   if (!order.customer || !order.items || !order.total) {
@@ -71,11 +66,10 @@ app.post('/orders', async (req, res) => {
   try {
     const result = await db.collection('orders').insertOne(order);
 
-    // Decrement inventory
     for (const item of order.items) {
       await db.collection('lessons').updateOne(
         { id: item.id },
-        { $inc: { availableInventory: -1 } }
+        { $inc: { space: -item.quantity } }
       );
     }
 
@@ -85,7 +79,6 @@ app.post('/orders', async (req, res) => {
   }
 });
 
-// UPDATE lesson (optional)
 app.put('/lessons/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   const update = req.body;
@@ -97,6 +90,5 @@ app.put('/lessons/:id', async (req, res) => {
   }
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
