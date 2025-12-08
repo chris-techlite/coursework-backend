@@ -1,3 +1,4 @@
+
 const express = require('express');
 const app = express();
 const path = require('path');
@@ -5,7 +6,7 @@ const { MongoClient } = require('mongodb');
 
 app.use(express.json());
 
-// CORS
+
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -13,16 +14,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Logging with timestamp
 app.use((req, res, next) => {
   console.log(`[${new Date().toLocaleString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'static')));
 
-// MongoDB connection
 let db;
 MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', { useUnifiedTopology: true })
   .then(client => {
@@ -31,7 +29,6 @@ MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.
   })
   .catch(err => console.error("MongoDB connection error:", err));
 
-// GET all lessons
 app.get('/lessons', async (req, res) => {
   try {
     const lessons = await db.collection('lessons').find({}).toArray();
@@ -41,7 +38,6 @@ app.get('/lessons', async (req, res) => {
   }
 });
 
-// SEARCH lessons (query param ?keyword=...)
 app.get('/search', async (req, res) => {
   const keyword = req.query.keyword || '';
   try {
@@ -62,7 +58,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// POST orders
 app.post('/orders', async (req, res) => {
   const order = req.body;
   if (!order.customer || !order.items || !order.total) {
@@ -72,7 +67,6 @@ app.post('/orders', async (req, res) => {
   try {
     const result = await db.collection('orders').insertOne(order);
 
-    // Decrement inventory for each item
     for (const item of order.items) {
       await db.collection('lessons').updateOne(
         { id: item.id },
@@ -86,7 +80,6 @@ app.post('/orders', async (req, res) => {
   }
 });
 
-// PUT update lesson (optional)
 app.put('/lessons/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   const update = req.body;
