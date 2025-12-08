@@ -1,12 +1,28 @@
 const express = require('express');
 const app = express();
-const { MongoClient, ObjectId } = require('mongodb');
-const cors = require('cors');
+const path = require('path');
+const { MongoClient } = require('mongodb');
 
 app.use(express.json());
-app.use(cors());
 
-// Connect to MongoDB
+// CORS
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
+// Logging with timestamp
+app.use((req, res, next) => {
+  console.log(`[${new Date().toLocaleString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+// Serve static files
+app.use(express.static(path.join(__dirname, 'static')));
+
+// MongoDB connection
 let db;
 MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', { useUnifiedTopology: true })
   .then(client => {
@@ -25,19 +41,22 @@ app.get('/lessons', async (req, res) => {
   }
 });
 
-// SEARCH lessons
+// SEARCH lessons (query param ?keyword=...)
 app.get('/search', async (req, res) => {
   const keyword = req.query.keyword || '';
   try {
-    const lessons = await db.collection('lessons').find({
+    const results = await db.collection('lessons').find({
       $or: [
         { title: { $regex: keyword, $options: 'i' } },
+        { subject: { $regex: keyword, $options: 'i' } },
         { description: { $regex: keyword, $options: 'i' } },
         { location: { $regex: keyword, $options: 'i' } },
         { price: { $regex: keyword, $options: 'i' } },
+        { space: { $regex: keyword, $options: 'i' } },
+        { availableInventory: { $regex: keyword, $options: 'i' } }
       ]
     }).toArray();
-    res.json(lessons);
+    res.json(results);
   } catch (err) {
     res.status(500).send(err);
   }
@@ -53,15 +72,27 @@ app.post('/orders', async (req, res) => {
   try {
     const result = await db.collection('orders').insertOne(order);
 
-    // Update inventory for each ordered item
+    // Decrement inventory for each item
     for (const item of order.items) {
       await db.collection('lessons').updateOne(
-        { _id: new ObjectId(item._id) },
-        { $inc: { availableInventory: -1 } }
+        { id: item.id },
+        { $inc: { space: -item.quantity } }
       );
     }
 
     res.json({ message: "Order saved and inventory updated", orderId: result.insertedId });
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
+// PUT update lesson (optional)
+app.put('/lessons/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const update = req.body;
+  try {
+    await db.collection('lessons').updateOne({ id }, { $set: update });
+    res.json({ message: "Lesson updated" });
   } catch (err) {
     res.status(500).send(err);
   }
