@@ -14,13 +14,14 @@ app.use((req, res, next) => {
     next();
 });
 
-// Logger middleware
+// Logging
 app.use((req, res, next) => {
-    console.log(req.method, req.url);
+    const timestamp = new Date().toLocaleString();
+    console.log(`[${timestamp}] ${req.method} ${req.url}`);
     next();
 });
 
-// Static files
+// Serve static files
 app.use((req, res, next) => {
     const filepath = path.join(__dirname, 'static', req.url);
     fs.stat(filepath, (err, fileinfo) => {
@@ -31,7 +32,7 @@ app.use((req, res, next) => {
 
 // Connect to MongoDB
 let db;
-MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', (err, client) => {
+MongoClient.connect('mongodb+srv://Christain_CO:monday@cluster0.jvuabsa.mongodb.net/', { useUnifiedTopology: true }, (err, client) => {
     if (err) throw err;
     db = client.db('coursework');
     console.log("MongoDB connected");
@@ -45,14 +46,25 @@ app.get('/lessons', (req, res) => {
     });
 });
 
+// POST order (with full receipt structure)
 app.post('/orders', (req, res) => {
     const order = req.body;
+
+    // Optional: validate the order structure
+    if (!order.customer || !order.items || !order.total) {
+        return res.status(400).json({ error: "Invalid order format" });
+    }
+
     db.collection('orders').insertOne(order, (err, result) => {
-        if (err) res.status(500).send(err);
-        else res.json({ message: "Order saved" });
+        if (err) {
+            res.status(500).send(err);
+        } else {
+            res.json({ message: "Order saved", orderId: result.insertedId });
+        }
     });
 });
 
+// UPDATE lesson
 app.put('/lessons/:id', (req, res) => {
     const id = parseInt(req.params.id);
     const update = req.body;
@@ -62,6 +74,7 @@ app.put('/lessons/:id', (req, res) => {
     });
 });
 
+// SEARCH lessons
 app.get('/search', (req, res) => {
     const keyword = req.query.keyword || '';
     db.collection('lessons').find({

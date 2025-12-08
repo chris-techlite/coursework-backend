@@ -2,7 +2,7 @@
     "name": "course-work",
     "private": true,
     "scripts": {
-        "start": "index.html"
+        "start": "node server.js"
     },
     "dependencies": {
         "express": "^5.1.0",
